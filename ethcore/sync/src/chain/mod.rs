@@ -539,7 +539,7 @@ impl ChainSync {
 		}
 		self.snapshot.clear();
 		self.reset(io, None);
-		self.continue_sync(io);
+		self.continue_sync(io, false);
 	}
 
 	/// Remove peer from active peer set. Peer will be reactivated on the next sync
@@ -612,7 +612,7 @@ impl ChainSync {
 		} else if timeout && !self.warp_sync.is_warp_only() {
 			trace!(target: "sync", "No snapshots found, starting full sync");
 			self.state = SyncState::Idle;
-			self.continue_sync(io);
+			self.continue_sync(io, false);
 		}
 	}
 
@@ -658,7 +658,7 @@ impl ChainSync {
 	}
 
 	/// Resume downloading
-	fn continue_sync(&mut self, io: &mut SyncIo) {
+	fn continue_sync(&mut self, io: &mut SyncIo, print_sync: bool) {
 		// Collect active peers that can sync
 		let confirmed_peers: Vec<(PeerId, u8)> = self.peers.iter().filter_map(|(peer_id, peer)|
 			if peer.can_sync() {
@@ -688,7 +688,7 @@ impl ChainSync {
 			peers.sort_by(|&(_, ref v1), &(_, ref v2)| v1.cmp(v2));
 
 			for (peer_id, _) in peers {
-				self.sync_peer(io, peer_id, false);
+				self.sync_peer(io, peer_id, false, print_sync);
 			}
 		}
 
@@ -712,7 +712,7 @@ impl ChainSync {
 	}
 
 	/// Find something to do for a peer. Called for a new peer or when a peer is done with its task.
-	fn sync_peer(&mut self, io: &mut SyncIo, peer_id: PeerId, force: bool) {
+	fn sync_peer(&mut self, io: &mut SyncIo, peer_id: PeerId, force: bool, print_sync: bool) {
 		if !self.active_peers.contains(&peer_id) {
 			trace!(target: "sync", "Skipping deactivated peer {}", peer_id);
 			return;
@@ -728,6 +728,9 @@ impl ChainSync {
 				return;
 			}
 		};
+		if print_sync {
+			info!(target: "sync", "Will try to sync Peer {}", peer_id);
+		}
 		let chain_info = io.chain().chain_info();
 		let syncing_difficulty = chain_info.pending_total_difficulty;
 		let num_active_peers = self.peers.values().filter(|p| p.asking != PeerAsking::Nothing).count();
@@ -973,7 +976,7 @@ impl ChainSync {
 			SyncState::Waiting if !io.chain().queue_info().is_full() => {
 				trace!(target: "sync", "Block queue un-full, continuing sync");
 				self.state = SyncState::Blocks;
-				self.continue_sync(io);
+				self.continue_sync(io, false);
 			},
 			SyncState::SnapshotWaiting => {
 				match io.snapshot_service().status() {
@@ -988,14 +991,14 @@ impl ChainSync {
 						if !self.snapshot.is_complete() && self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
 							trace!(target:"sync", "Resuming snapshot sync");
 							self.state = SyncState::SnapshotData;
-							self.continue_sync(io);
+							self.continue_sync(io, false);
 						}
 					},
 					RestorationStatus::Failed => {
 						trace!(target: "sync", "Snapshot restoration aborted");
 						self.state = SyncState::WaitingPeers;
 						self.snapshot.clear();
-						self.continue_sync(io);
+						self.continue_sync(io,false);
 					},
 				}
 			},

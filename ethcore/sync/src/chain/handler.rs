@@ -103,17 +103,17 @@ impl SyncHandler {
 			},
 			Err(DownloaderImportError::Ignored) => {
 				if ::std::env::var(CONTINUE_SYNC_ENV_VAR_NAME).is_ok() {
-					sync.sync_peer(io, peer, false);
+					sync.sync_peer(io, peer, false, false);
 				}
 			},
 			Ok(()) => {
 				// give a task to the same peer first
-				sync.sync_peer(io, peer, false);
+				sync.sync_peer(io, peer, false, false);
 			},
 		}
 		// give tasks to other peers
 		if ::std::env::var(CONTINUE_SYNC_ENV_VAR_NAME).is_ok() {
-			sync.continue_sync(io);
+			sync.continue_sync(io, true);
 		}
 	}
 
@@ -148,7 +148,7 @@ impl SyncHandler {
 			}
 
 			if ::std::env::var(CONTINUE_SYNC_ENV_VAR_NAME).is_ok() {
-				sync.continue_sync(io);
+				sync.continue_sync(io, true);
 			}
 		}
 	}
@@ -222,7 +222,7 @@ impl SyncHandler {
 			} else {
 				trace!(target: "sync", "New unknown block {:?}", hash);
 				//TODO: handle too many unknown blocks
-				sync.sync_peer(io, peer_id, true);
+				sync.sync_peer(io, peer_id, true, false);
 			}
 		}
 		Ok(())
@@ -294,7 +294,7 @@ impl SyncHandler {
 			trace!(target: "sync", "Downloading blocks for new hashes");
 			sync.new_blocks.reset_to(new_hashes);
 			sync.state = SyncState::NewBlocks;
-			sync.sync_peer(io, peer_id, true);
+			sync.sync_peer(io, peer_id, true, false);
 		}
 		Ok(())
 	}
